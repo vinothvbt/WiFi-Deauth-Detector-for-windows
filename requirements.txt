@@ -1,0 +1,17 @@
+# WiFi Deauth Detector Requirements
+# Core packet sniffing and network analysis
+scapy>=2.5.0
+
+# GUI framework  
+PyQt5>=5.15.0
+
+# System notifications
+plyer>=2.1.0
+
+# Additional utilities
+psutil>=5.9.0
+
+# Development dependencies (optional)
+# pytest>=7.0.0
+# black>=22.0.0
+# flake8>=4.0.0
