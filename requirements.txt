@@ -1,0 +1,4 @@
+scapy
+pyqt5
+plyer
+colorama
