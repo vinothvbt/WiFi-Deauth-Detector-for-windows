@@ -1,0 +1,23 @@
+# WiFi Deauth Detector Build Files
+*.spec
+build/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Settings and logs
+settings.json
+deauth_log.txt
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
