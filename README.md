@@ -79,3 +79,40 @@ venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Run the application
+python wifi_detector.py
+
+# Run tests
+python test_wifi_detector.py
+```
+
+---
+
+## 🎯 Current Implementation Status
+
+### ✅ Issue #3: Npcap + Monitor Mode Sniffing - COMPLETED
+
+- **✅ Detect WiFi interfaces via scapy.all.get_if_list()** 
+  - Implemented in `wifi_detector.py`
+  - Automatically filters for WiFi interfaces (Wi-Fi, Wireless, WiFi, WLAN keywords)
+  - Falls back to showing all interfaces if no WiFi interfaces detected
+
+- **✅ Let user select interface**
+  - Interactive CLI interface for interface selection  
+  - Numbered list display with clear prompts
+  - Input validation and error handling
+  - 'q' option to quit gracefully
+
+- **✅ Start monitor mode (manual via Npcap driver config or pre-assumed)**
+  - Comprehensive setup instructions for Npcap configuration
+  - Scapy interface configuration  
+  - Clear documentation for manual monitor mode setup
+  - Ready framework for packet sniffing implementation
+
+### 📁 Files Added:
+- `wifi_detector.py` - Main application with WiFi detection and monitor mode setup
+- `test_wifi_detector.py` - Test suite validating all three requirements  
+- `requirements.txt` - Python dependencies (scapy)
+
+---
