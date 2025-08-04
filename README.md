@@ -70,12 +70,34 @@ A lightweight real-time WiFi deauthentication attack detector for Windows. Built
 ### 2. Python Setup (Fast Start)
 
 ```bash
-git clone https://github.com/your-username/wifi-deauth-detector.git
-cd wifi-deauth-detector
+git clone https://github.com/vinothvbt/WiFi-Deauth-Detector-for-windows.git
+cd WiFi-Deauth-Detector-for-windows
+```
 
+#### Option A: Automated Setup (Recommended)
+
+**Windows:**
+```cmd
+setup_venv.bat
+```
+
+**Linux/macOS:**
+```bash
+./setup_venv.sh
+```
+
+#### Option B: Manual Setup
+
+```bash
 # Create virtual environment
 python -m venv venv
+
+# Activate virtual environment (Windows)
 venv\Scripts\activate
 
+# Activate virtual environment (Linux/macOS)
+source venv/bin/activate
+
 # Install dependencies
+pip install --upgrade pip
 pip install -r requirements.txt
