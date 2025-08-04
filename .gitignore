@@ -79,3 +79,11 @@ venv.bak/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Application specific
+*.pcap
+*.cap

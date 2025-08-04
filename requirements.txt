@@ -1,4 +1,4 @@
-scapy>=2.4.5
+scapy
 pyqt5
 plyer
 colorama
