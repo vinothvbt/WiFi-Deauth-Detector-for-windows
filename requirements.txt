@@ -1,1 +1,4 @@
 scapy>=2.4.5
+pyqt5
+plyer
+colorama
