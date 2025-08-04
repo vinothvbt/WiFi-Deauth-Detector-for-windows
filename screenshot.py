@@ -16,6 +16,8 @@ def create_screenshots():
     """Create screenshots of the application"""
     print("📸 Creating screenshots for documentation...")
     
+    # Use offscreen platform for headless screenshots
+    os.environ['QT_QPA_PLATFORM'] = 'offscreen'
     app = QApplication(sys.argv)
     
     # Create window
