@@ -86,8 +86,4 @@ logs/
 
 # Application specific
 *.pcap
-*.cap
 
-# WiFi Deauth Detector specific
-settings.json
-deauth_log.txt

@@ -5,3 +5,8 @@ colorama
 requests==2.31.0
 psutil==5.9.5
 pyinstaller==5.13.2
+=======
+scapy
+pyqt5
+plyer
+colorama
