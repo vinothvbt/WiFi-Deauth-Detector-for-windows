@@ -19,40 +19,65 @@ from PyQt5.QtGui import QIcon, QFont, QPixmap
 import subprocess
 import requests
 from plyer import notification
+from windows_wifi_monitor import WindowsWiFiMonitor, LegacyDeauthDetector
 
 class DeauthDetector(QObject):
-    """Core deauth detection engine"""
-    attack_detected = pyqtSignal(str, str, str)  # attacker_mac, target_mac, timestamp
+    """Enhanced deauth detection engine using Windows WiFi monitoring"""
+    attack_detected = pyqtSignal(str, str, str)  # reason, timestamp, details
     
-    def __init__(self):
+    def __init__(self, use_real_monitoring=True):
         super().__init__()
         self.is_monitoring = False
-        self.monitor_thread = None
+        self.use_real_monitoring = use_real_monitoring
+        
+        if self.use_real_monitoring:
+            # Use real Windows WiFi monitoring
+            self.wifi_monitor = WindowsWiFiMonitor()
+            self.wifi_monitor.suspicious_disconnect.connect(self._handle_suspicious_disconnect)
+        else:
+            # Use legacy demo detector for testing
+            self.legacy_detector = LegacyDeauthDetector()
+            self.legacy_detector.attack_detected.connect(self._handle_legacy_attack)
         
     def start_monitoring(self):
         """Start monitoring for deauth attacks"""
         if not self.is_monitoring:
             self.is_monitoring = True
-            self.monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
-            self.monitor_thread.start()
+            if self.use_real_monitoring:
+                self.wifi_monitor.start_monitoring()
+            else:
+                self.legacy_detector.start_monitoring()
             
     def stop_monitoring(self):
         """Stop monitoring"""
         self.is_monitoring = False
-        
-    def _monitor_loop(self):
-        """Main monitoring loop - simulated for demo purposes"""
-        while self.is_monitoring:
-            time.sleep(5)  # Check every 5 seconds
-            
-            # Simulate random deauth attack detection for demo
-            import random
-            if random.random() < 0.1:  # 10% chance every 5 seconds
-                attacker_mac = f"00:11:22:{random.randint(10,99):02d}:{random.randint(10,99):02d}:{random.randint(10,99):02d}"
-                target_mac = f"aa:bb:cc:{random.randint(10,99):02d}:{random.randint(10,99):02d}:{random.randint(10,99):02d}"
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                
-                self.attack_detected.emit(attacker_mac, target_mac, timestamp)
+        if self.use_real_monitoring:
+            self.wifi_monitor.stop_monitoring()
+        else:
+            self.legacy_detector.stop_monitoring()
+    
+    def _handle_suspicious_disconnect(self, reason, timestamp, details):
+        """Handle suspicious disconnect detected by Windows WiFi monitor"""
+        # Emit in the format expected by the GUI (reason as "attacker", details as "target")
+        self.attack_detected.emit(reason, details, timestamp)
+    
+    def _handle_legacy_attack(self, attacker_mac, target_mac, timestamp):
+        """Handle legacy simulated attack for demo purposes"""
+        self.attack_detected.emit(attacker_mac, target_mac, timestamp)
+    
+    def get_recent_events(self):
+        """Get recent WiFi events for display"""
+        if self.use_real_monitoring:
+            return self.wifi_monitor.get_recent_events()
+        else:
+            return []
+    
+    def get_network_status(self):
+        """Get current network status"""
+        if self.use_real_monitoring:
+            return self.wifi_monitor.get_network_interfaces()
+        else:
+            return []
 
 class NetworkManager:
     """Handles network switching functionality"""
@@ -126,7 +151,8 @@ class SettingsManager:
             "auto_switch_enabled": False,
             "auto_switch_confirm": True,
             "notifications_enabled": True,
-            "log_attacks": True
+            "log_attacks": True,
+            "demo_mode": False
         }
         self.settings = self.load_settings()
     
@@ -169,7 +195,13 @@ class WiFiDeauthDetectorGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.settings = SettingsManager()
-        self.detector = DeauthDetector()
+        
+        # Determine monitoring mode based on platform and settings
+        use_real_monitoring = os.name == 'nt'  # Windows
+        if self.settings.get("demo_mode", False):
+            use_real_monitoring = False
+            
+        self.detector = DeauthDetector(use_real_monitoring=use_real_monitoring)
         self.discord_webhook = DiscordWebhook(self.settings.get("discord_webhook"))
         self.network_manager = NetworkManager()
         
@@ -215,6 +247,26 @@ class WiFiDeauthDetectorGUI(QMainWindow):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         
+        # Detection method info
+        info_group = QGroupBox("Detection Method")
+        info_layout = QVBoxLayout(info_group)
+        
+        use_real_monitoring = os.name == 'nt' and not self.settings.get("demo_mode", False)
+        if use_real_monitoring:
+            method_text = "🔍 Normal Mode: Monitoring WiFi connection events using Windows APIs\n" \
+                         "• No special hardware required\n" \
+                         "• Works on all Windows laptops\n" \
+                         "• Detects suspicious disconnection patterns"
+        else:
+            method_text = "🎭 Demo Mode: Simulated deauth attack detection\n" \
+                         "• For demonstration purposes\n" \
+                         "• Real monitoring requires Windows"
+        
+        method_label = QLabel(method_text)
+        method_label.setStyleSheet("color: #666; font-size: 10px;")
+        info_layout.addWidget(method_label)
+        layout.addWidget(info_group)
+        
         # Status section
         status_group = QGroupBox("Detection Status")
         status_layout = QVBoxLayout(status_group)
@@ -256,8 +308,8 @@ class WiFiDeauthDetectorGUI(QMainWindow):
         self.total_attacks_label = QLabel("0")
         self.last_attack_label = QLabel("Never")
         
-        stats_layout.addRow("Total Attacks Detected:", self.total_attacks_label)
-        stats_layout.addRow("Last Attack:", self.last_attack_label)
+        stats_layout.addRow("Suspicious Events Detected:", self.total_attacks_label)
+        stats_layout.addRow("Last Event:", self.last_attack_label)
         
         layout.addWidget(stats_group)
         
@@ -309,9 +361,11 @@ class WiFiDeauthDetectorGUI(QMainWindow):
         
         self.notifications_cb = QCheckBox("Enable system notifications")
         self.logging_cb = QCheckBox("Log attacks to file")
+        self.demo_mode_cb = QCheckBox("Demo mode (simulated attacks for testing)")
         
         general_layout.addRow(self.notifications_cb)
         general_layout.addRow(self.logging_cb)
+        general_layout.addRow(self.demo_mode_cb)
         
         layout.addWidget(general_group)
         
@@ -385,10 +439,30 @@ class WiFiDeauthDetectorGUI(QMainWindow):
         self.stop_btn.setEnabled(False)
         self.log_message("Monitoring stopped")
     
-    def handle_attack_detected(self, attacker_mac, target_mac, timestamp):
-        """Handle detected deauth attack"""
+    def handle_attack_detected(self, reason_or_attacker, details_or_target, timestamp):
+        """Handle detected deauth attack or suspicious event"""
+        # Determine if this is the new format (reason, details, timestamp) or legacy (attacker, target, timestamp)
+        use_real_monitoring = os.name == 'nt' and not self.settings.get("demo_mode", False)
+        
+        if use_real_monitoring:
+            # New format: reason, details, timestamp
+            alert_text = f"[{timestamp}] SUSPICIOUS ACTIVITY! {reason_or_attacker}: {details_or_target}"
+            notification_title = "WiFi Security Alert!"
+            notification_message = f"{reason_or_attacker}"
+            
+            # For Discord webhook, adapt to expected format
+            webhook_attacker = reason_or_attacker
+            webhook_target = details_or_target
+        else:
+            # Legacy format: attacker_mac, target_mac, timestamp
+            alert_text = f"[{timestamp}] SIMULATED ATTACK! Attacker: {reason_or_attacker} → Target: {details_or_target}"
+            notification_title = "WiFi Deauth Attack Detected!"
+            notification_message = f"Attacker: {reason_or_attacker}"
+            
+            webhook_attacker = reason_or_attacker
+            webhook_target = details_or_target
+        
         # Update UI
-        alert_text = f"[{timestamp}] ATTACK! Attacker: {attacker_mac} → Target: {target_mac}"
         self.alerts_display.append(alert_text)
         
         # Update statistics
@@ -398,23 +472,23 @@ class WiFiDeauthDetectorGUI(QMainWindow):
         
         # Log to file
         if self.settings.get("log_attacks"):
-            self.log_message(f"DEAUTH ATTACK - {alert_text}")
+            self.log_message(f"SECURITY EVENT - {alert_text}")
         
         # System notification
         if self.settings.get("notifications_enabled"):
             notification.notify(
-                title="WiFi Deauth Attack Detected!",
-                message=f"Attacker: {attacker_mac}",
+                title=notification_title,
+                message=notification_message,
                 timeout=10
             )
         
         # Discord webhook
         if self.settings.get("discord_enabled"):
             webhook = DiscordWebhook(self.settings.get("discord_webhook"))
-            webhook.send_alert(attacker_mac, target_mac, timestamp)
+            webhook.send_alert(webhook_attacker, webhook_target, timestamp)
         
-        # Auto network switch
-        if self.settings.get("auto_switch_enabled"):
+        # Auto network switch (only for real suspicious events, not simulated)
+        if use_real_monitoring and self.settings.get("auto_switch_enabled"):
             self.handle_auto_switch()
     
     def handle_auto_switch(self):
@@ -427,7 +501,7 @@ class WiFiDeauthDetectorGUI(QMainWindow):
             reply = QMessageBox.question(
                 self, 
                 "Network Switch Confirmation",
-                f"Deauth attack detected! Switch to backup network '{backup_network}'?",
+                f"Suspicious WiFi activity detected! Switch to backup network '{backup_network}'?",
                 QMessageBox.Yes | QMessageBox.No
             )
             if reply != QMessageBox.Yes:
@@ -470,6 +544,7 @@ class WiFiDeauthDetectorGUI(QMainWindow):
         self.discord_webhook_edit.setText(self.settings.get("discord_webhook"))
         self.notifications_cb.setChecked(self.settings.get("notifications_enabled"))
         self.logging_cb.setChecked(self.settings.get("log_attacks"))
+        self.demo_mode_cb.setChecked(self.settings.get("demo_mode"))
         
         # Set backup network if it exists
         backup_network = self.settings.get("backup_network")
@@ -489,9 +564,10 @@ class WiFiDeauthDetectorGUI(QMainWindow):
         self.settings.set("discord_webhook", self.discord_webhook_edit.text())
         self.settings.set("notifications_enabled", self.notifications_cb.isChecked())
         self.settings.set("log_attacks", self.logging_cb.isChecked())
+        self.settings.set("demo_mode", self.demo_mode_cb.isChecked())
         
         if self.settings.save_settings():
-            QMessageBox.information(self, "Success", "Settings saved successfully!")
+            QMessageBox.information(self, "Success", "Settings saved successfully!\nRestart the application for demo mode changes to take effect.")
         else:
             QMessageBox.warning(self, "Error", "Failed to save settings")
         

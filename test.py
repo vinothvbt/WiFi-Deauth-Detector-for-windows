@@ -15,6 +15,7 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from main import SettingsManager, NetworkManager, DiscordWebhook
+from windows_wifi_monitor import WindowsWiFiMonitor
 
 class TestSettingsManager(unittest.TestCase):
     """Test settings management functionality"""
@@ -35,6 +36,7 @@ class TestSettingsManager(unittest.TestCase):
         self.assertFalse(self.settings.get("auto_switch_enabled"))
         self.assertTrue(self.settings.get("notifications_enabled"))
         self.assertTrue(self.settings.get("log_attacks"))
+        self.assertFalse(self.settings.get("demo_mode"))
     
     def test_save_and_load_settings(self):
         """Test saving and loading settings"""
@@ -96,6 +98,63 @@ class TestNetworkManager(unittest.TestCase):
         success = NetworkManager.connect_to_network("TestNetwork")
         self.assertFalse(success)
 
+class TestWindowsWiFiMonitor(unittest.TestCase):
+    """Test Windows WiFi monitoring functionality"""
+    
+    def setUp(self):
+        """Set up test environment"""
+        self.monitor = WindowsWiFiMonitor()
+    
+    @patch('subprocess.run')
+    def test_get_wifi_status_connected(self, mock_run):
+        """Test getting WiFi status when connected"""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = """
+            State                   : connected
+            SSID                    : TestNetwork
+            Signal                  : 80%
+        """
+        mock_run.return_value = mock_result
+        
+        status = self.monitor._get_wifi_status()
+        self.assertTrue(status['connected'])
+        self.assertEqual(status['ssid'], 'TestNetwork')
+        self.assertEqual(status['signal'], 80)
+    
+    @patch('subprocess.run')
+    def test_get_wifi_status_disconnected(self, mock_run):
+        """Test getting WiFi status when disconnected"""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = """
+            State                   : disconnected
+        """
+        mock_run.return_value = mock_result
+        
+        status = self.monitor._get_wifi_status()
+        self.assertFalse(status['connected'])
+        self.assertEqual(status['state'], 'disconnected')
+    
+    def test_disconnect_pattern_detection(self):
+        """Test disconnect pattern detection"""
+        # Add multiple disconnect events
+        from datetime import datetime, timedelta
+        
+        now = datetime.now()
+        for i in range(4):
+            disconnect_info = {
+                'timestamp': now - timedelta(seconds=i*30),
+                'ssid': 'TestNetwork',
+                'state': 'disconnected'
+            }
+            self.monitor.disconnect_history.append(disconnect_info)
+        
+        # This should trigger pattern detection
+        events = self.monitor.get_recent_events()
+        self.assertEqual(len(events), 4)
+
+
 class TestDiscordWebhook(unittest.TestCase):
     """Test Discord webhook functionality"""
     
@@ -152,9 +211,10 @@ def run_tests():
     test_suite = unittest.TestSuite()
     
     # Add test cases
-    test_suite.addTest(unittest.makeSuite(TestSettingsManager))
-    test_suite.addTest(unittest.makeSuite(TestNetworkManager))
-    test_suite.addTest(unittest.makeSuite(TestDiscordWebhook))
+    test_suite.addTest(unittest.TestLoader().loadTestsFromTestCase(TestSettingsManager))
+    test_suite.addTest(unittest.TestLoader().loadTestsFromTestCase(TestNetworkManager))
+    test_suite.addTest(unittest.TestLoader().loadTestsFromTestCase(TestWindowsWiFiMonitor))
+    test_suite.addTest(unittest.TestLoader().loadTestsFromTestCase(TestDiscordWebhook))
     
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)

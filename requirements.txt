@@ -1,4 +1,3 @@
-scapy==2.5.0
 PyQt5==5.15.9
 plyer==2.1.0
 colorama
