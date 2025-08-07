@@ -19,7 +19,16 @@ from PyQt5.QtGui import QIcon, QFont, QPixmap
 import subprocess
 import requests
 from plyer import notification
-from windows_wifi_monitor import WindowsWiFiMonitor, LegacyDeauthDetector
+# Import enhanced components - fallback to original if not available
+try:
+    from enhanced_wifi_monitor import EnhancedWiFiMonitor as WindowsWiFiMonitor, LegacyDeauthDetector
+    from secure_network_manager import SecureNetworkManager as NetworkManager
+    from secure_settings_manager import SecureSettingsManager as SettingsManager
+    ENHANCED_MODE = True
+except ImportError as e:
+    print(f"Enhanced components not available ({e}), using standard components")
+    from windows_wifi_monitor import WindowsWiFiMonitor, LegacyDeauthDetector
+    ENHANCED_MODE = False
 
 class DeauthDetector(QObject):
     """Enhanced deauth detection engine using Windows WiFi monitoring"""
@@ -79,35 +88,44 @@ class DeauthDetector(QObject):
         else:
             return []
 
-class NetworkManager:
-    """Handles network switching functionality"""
-    
-    @staticmethod
-    def get_available_profiles():
-        """Get list of available WiFi profiles"""
-        try:
-            result = subprocess.run(['netsh', 'wlan', 'show', 'profiles'], 
-                                  capture_output=True, text=True, shell=True)
-            profiles = []
-            for line in result.stdout.split('\n'):
-                if 'All User Profile' in line:
-                    profile_name = line.split(':')[1].strip()
-                    profiles.append(profile_name)
-            return profiles
-        except Exception as e:
-            print(f"Error getting WiFi profiles: {e}")
-            return []
-    
-    @staticmethod
-    def connect_to_network(profile_name):
-        """Connect to a specific WiFi network"""
-        try:
-            result = subprocess.run(['netsh', 'wlan', 'connect', f'name="{profile_name}"'], 
-                                  capture_output=True, text=True, shell=True)
-            return result.returncode == 0
-        except Exception as e:
-            print(f"Error connecting to network {profile_name}: {e}")
-            return False
+# NetworkManager is now imported from secure_network_manager if available
+if not ENHANCED_MODE:
+    class NetworkManager:
+        """Legacy network switching functionality with basic security"""
+        
+        @staticmethod
+        def get_available_profiles():
+            """Get list of available WiFi profiles"""
+            try:
+                result = subprocess.run(['netsh', 'wlan', 'show', 'profiles'], 
+                                      capture_output=True, text=True, timeout=10)
+                profiles = []
+                for line in result.stdout.split('\n'):
+                    if 'All User Profile' in line and ':' in line:
+                        profile_name = line.split(':')[1].strip()
+                        # Basic sanitization
+                        if profile_name and len(profile_name) <= 32:
+                            profiles.append(profile_name)
+                return profiles
+            except Exception as e:
+                print(f"Error getting WiFi profiles: {e}")
+                return []
+        
+        @staticmethod
+        def connect_to_network(profile_name):
+            """Connect to a specific WiFi network with basic validation"""
+            try:
+                # Basic input validation
+                if not profile_name or len(profile_name) > 32:
+                    print(f"Invalid profile name: {profile_name}")
+                    return False
+                
+                result = subprocess.run(['netsh', 'wlan', 'connect', f'name="{profile_name}"'], 
+                                      capture_output=True, text=True, timeout=15)
+                return result.returncode == 0
+            except Exception as e:
+                print(f"Error connecting to network {profile_name}: {e}")
+                return False
 
 class DiscordWebhook:
     """Handles Discord webhook notifications"""
@@ -139,55 +157,77 @@ class DiscordWebhook:
             print(f"Error sending Discord webhook: {e}")
             return False
 
-class SettingsManager:
-    """Manages application settings"""
-    
-    def __init__(self, settings_file="settings.json"):
-        self.settings_file = settings_file
-        self.default_settings = {
-            "backup_network": "",
-            "discord_webhook": "",
-            "discord_enabled": False,
-            "auto_switch_enabled": False,
-            "auto_switch_confirm": True,
-            "notifications_enabled": True,
-            "log_attacks": True,
-            "demo_mode": False
-        }
-        self.settings = self.load_settings()
-    
-    def load_settings(self):
-        """Load settings from file"""
-        try:
-            if os.path.exists(self.settings_file):
-                with open(self.settings_file, 'r') as f:
-                    loaded = json.load(f)
-                    # Merge with defaults to handle new settings
-                    settings = self.default_settings.copy()
-                    settings.update(loaded)
-                    return settings
-            return self.default_settings.copy()
-        except Exception as e:
-            print(f"Error loading settings: {e}")
-            return self.default_settings.copy()
-    
-    def save_settings(self):
-        """Save settings to file"""
-        try:
-            with open(self.settings_file, 'w') as f:
-                json.dump(self.settings, f, indent=2)
-            return True
-        except Exception as e:
-            print(f"Error saving settings: {e}")
-            return False
-    
-    def get(self, key, default=None):
-        """Get setting value"""
-        return self.settings.get(key, default)
-    
-    def set(self, key, value):
-        """Set setting value"""
-        self.settings[key] = value
+# SettingsManager is now imported from secure_settings_manager if available
+if not ENHANCED_MODE:
+    class SettingsManager:
+        """Legacy settings management with basic security"""
+        
+        def __init__(self, settings_file="settings.json"):
+            self.settings_file = settings_file
+            self.default_settings = {
+                "backup_network": "",
+                "discord_webhook": "",
+                "discord_enabled": False,
+                "auto_switch_enabled": False,
+                "auto_switch_confirm": True,
+                "notifications_enabled": True,
+                "log_attacks": True,
+                "demo_mode": False
+            }
+            self.settings = self.load_settings()
+        
+        def load_settings(self):
+            """Load settings from file with validation"""
+            try:
+                if os.path.exists(self.settings_file):
+                    with open(self.settings_file, 'r') as f:
+                        loaded = json.load(f)
+                        # Merge with defaults and validate
+                        settings = self.default_settings.copy()
+                        for key, value in loaded.items():
+                            if key in self.default_settings:
+                                # Basic validation
+                                if key == "backup_network" and isinstance(value, str) and len(value) <= 32:
+                                    settings[key] = value
+                                elif key == "discord_webhook" and isinstance(value, str):
+                                    if not value or value.startswith('https://discord.com/api/webhooks/'):
+                                        settings[key] = value
+                                elif isinstance(value, type(self.default_settings[key])):
+                                    settings[key] = value
+                        return settings
+                return self.default_settings.copy()
+            except Exception as e:
+                print(f"Error loading settings: {e}")
+                return self.default_settings.copy()
+        
+        def save_settings(self):
+            """Save settings to file with basic security"""
+            try:
+                # Set restrictive permissions
+                with open(self.settings_file, 'w') as f:
+                    json.dump(self.settings, f, indent=2)
+                try:
+                    os.chmod(self.settings_file, 0o600)  # Owner read/write only
+                except:
+                    pass  # May fail on Windows
+                return True
+            except Exception as e:
+                print(f"Error saving settings: {e}")
+                return False
+        
+        def get(self, key, default=None):
+            """Get setting value"""
+            return self.settings.get(key, default)
+        
+        def set(self, key, value):
+            """Set setting value with basic validation"""
+            if key == "backup_network" and isinstance(value, str) and len(value) > 32:
+                print(f"Network name too long: {value}")
+                return
+            elif key == "discord_webhook" and value and not value.startswith('https://discord.com/api/webhooks/'):
+                print(f"Invalid Discord webhook URL: {value}")
+                return
+            self.settings[key] = value
 
 class WiFiDeauthDetectorGUI(QMainWindow):
     """Main GUI window"""
@@ -217,7 +257,8 @@ class WiFiDeauthDetectorGUI(QMainWindow):
         
     def init_ui(self):
         """Initialize the user interface"""
-        self.setWindowTitle("WiFi Deauth Detector v1.0.0")
+        title = "WiFi Deauth Detector v2.1" + (" [Enhanced]" if ENHANCED_MODE else " [Standard]")
+        self.setWindowTitle(title)
         self.setGeometry(100, 100, 800, 600)
         
         # Create central widget and main layout
@@ -253,10 +294,12 @@ class WiFiDeauthDetectorGUI(QMainWindow):
         
         use_real_monitoring = os.name == 'nt' and not self.settings.get("demo_mode", False)
         if use_real_monitoring:
-            method_text = "🔍 Normal Mode: Monitoring WiFi connection events using Windows APIs\n" \
-                         "• No special hardware required\n" \
-                         "• Works on all Windows laptops\n" \
-                         "• Detects suspicious disconnection patterns"
+            mode_desc = "Enhanced" if ENHANCED_MODE else "Normal"
+            method_text = f"🔍 {mode_desc} Mode: Advanced WiFi connection monitoring\n" \
+                         "• Sophisticated pattern recognition\n" \
+                         "• Multi-factor threat assessment\n" \
+                         "• Signal strength analysis\n" \
+                         "• Temporal attack detection"
         else:
             method_text = "🎭 Demo Mode: Simulated deauth attack detection\n" \
                          "• For demonstration purposes\n" \
@@ -542,13 +585,23 @@ class WiFiDeauthDetectorGUI(QMainWindow):
             if reply != QMessageBox.Yes:
                 return
         
-        success = self.network_manager.connect_to_network(backup_network)
-        if success:
-            self.log_message(f"Successfully switched to backup network: {backup_network}")
-            QMessageBox.information(self, "Network Switch", f"Switched to {backup_network}")
+        # Enhanced network manager returns tuple (success, message)
+        if ENHANCED_MODE and hasattr(self.network_manager, 'connect_to_network'):
+            try:
+                success, message = self.network_manager.connect_to_network(backup_network)
+            except (TypeError, ValueError):
+                # Fallback for legacy manager
+                success = self.network_manager.connect_to_network(backup_network)
+                message = f"Connected to {backup_network}" if success else f"Failed to connect to {backup_network}"
         else:
-            self.log_message(f"Failed to switch to backup network: {backup_network}")
-            QMessageBox.warning(self, "Network Switch Failed", f"Could not connect to {backup_network}")
+            success = self.network_manager.connect_to_network(backup_network)
+            message = f"Connected to {backup_network}" if success else f"Failed to connect to {backup_network}"
+        
+        self.log_message(f"Network switch attempt: {message}")
+        if success:
+            QMessageBox.information(self, "Network Switch", message)
+        else:
+            QMessageBox.warning(self, "Network Switch Failed", message)
     
     def refresh_network_list(self):
         """Refresh the list of available networks"""
