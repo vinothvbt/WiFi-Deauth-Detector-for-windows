@@ -404,24 +404,59 @@ class WiFiDeauthDetectorGUI(QMainWindow):
         return widget
     
     def setup_system_tray(self):
-        """Setup system tray icon"""
+        """Setup system tray icon with enhanced normal mode information"""
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.tray_icon = QSystemTrayIcon(self)
             
             # Create tray menu
             tray_menu = QMenu()
-            show_action = QAction("Show", self)
-            quit_action = QAction("Quit", self)
+            
+            # Status info
+            use_real_monitoring = os.name == 'nt' and not self.settings.get("demo_mode", False)
+            mode_text = "Normal Mode" if use_real_monitoring else "Demo Mode"
+            mode_action = QAction(f"🔍 {mode_text} Active", self)
+            mode_action.setEnabled(False)
+            tray_menu.addAction(mode_action)
+            
+            tray_menu.addSeparator()
+            
+            # Main actions
+            show_action = QAction("Show Window", self)
+            start_action = QAction("Start Monitoring", self)
+            stop_action = QAction("Stop Monitoring", self)
             
             show_action.triggered.connect(self.show)
-            quit_action.triggered.connect(self.close)
+            start_action.triggered.connect(self.start_monitoring)
+            stop_action.triggered.connect(self.stop_monitoring)
             
             tray_menu.addAction(show_action)
+            tray_menu.addAction(start_action)
+            tray_menu.addAction(stop_action)
             tray_menu.addSeparator()
+            
+            # Quick settings
+            settings_action = QAction("Settings", self)
+            settings_action.triggered.connect(lambda: self.show() and None)
+            tray_menu.addAction(settings_action)
+            
+            tray_menu.addSeparator()
+            quit_action = QAction("Quit", self)
+            quit_action.triggered.connect(self.close)
             tray_menu.addAction(quit_action)
             
             self.tray_icon.setContextMenu(tray_menu)
+            self.tray_icon.setToolTip(f"WiFi Deauth Detector v2.0\n{mode_text} - Click to open")
             self.tray_icon.show()
+            
+            # Add double-click to show window
+            self.tray_icon.activated.connect(self._tray_icon_activated)
+    
+    def _tray_icon_activated(self, reason):
+        """Handle tray icon activation"""
+        if reason == QSystemTrayIcon.DoubleClick:
+            self.show()
+            self.raise_()
+            self.activateWindow()
     
     def start_monitoring(self):
         """Start deauth monitoring"""
