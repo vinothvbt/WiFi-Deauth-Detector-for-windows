@@ -46,12 +46,19 @@ def build_exe():
 def create_installer():
     """Create a simple batch installer"""
     installer_content = '''@echo off
-echo Installing WiFi Deauth Detector...
+echo Installing WiFi Deauth Detector v2.0...
 echo.
-echo Prerequisites:
-echo 1. Windows 10/11
-echo 2. Npcap installed in WinPcap compatibility mode
-echo 3. Administrator privileges for network operations
+echo Features:
+echo - Works on ANY Windows laptop (no special hardware)
+echo - Normal mode operation (no monitor mode required)
+echo - Real-time WiFi connection monitoring
+echo - Auto network switching on suspicious activity
+echo - Discord webhook alerts
+echo.
+echo Requirements:
+echo - Windows 10/11
+echo - Standard WiFi adapter (any brand/model)
+echo - No administrator privileges required
 echo.
 pause
 echo.
