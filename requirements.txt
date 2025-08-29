@@ -1,6 +1,0 @@
-PyQt5==5.15.9
-plyer==2.1.0
-colorama
-requests==2.31.0
-psutil==5.9.5
-pyinstaller==5.13.2
